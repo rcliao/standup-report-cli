@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 )
 
 func main() {
@@ -16,5 +17,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Hello, %v are you ready to do standup report based on git history?", name)
+	fmt.Printf("Hello, %s are you ready to do standup report based on git history?\n", *name)
+
+	standupCmd := exec.Command("git", "standup")
+
+	standupOut, err := standupCmd.Output()
+
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("standup output:\n%s\n", standupOut)
 }

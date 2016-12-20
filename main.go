@@ -16,5 +16,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Hello, %v", name)
+	fmt.Printf("Hello, %v are you ready to do standup report based on git history?", name)
 }

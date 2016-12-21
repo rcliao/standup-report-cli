@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Standup report</title>
+</head>
+<body>
+    <ul>
+        {{ range $index, $element := commits }}
+            <li>
+                {{ $index }} - 
+                {{ $element }}
+            </li>
+        {{ end }}
+    </ul>
+</body>
+</html>

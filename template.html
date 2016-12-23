@@ -6,7 +6,7 @@
 </head>
 <body>
     <ul>
-        {{ range $index, $element := commits }}
+        {{ range $index, $element := . }}
             <li>
                 {{ $index }} - 
                 {{ $element }}

@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"html/template"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -19,15 +21,13 @@ func main() {
 
 	flag.Parse()
 
-	if *name == "" {
-		flag.PrintDefaults()
-		os.Exit(1)
+	if *name != "" {
+		fmt.Printf("Got %s for stand up report. Generating report ...\n", *name)
+	} else {
+		fmt.Println("Generating report for default git user")
 	}
 
-	fmt.Printf("Hello, %s are you ready to do standup report based on git history?\n", *name)
-
 	standupCmd := exec.Command("git", "standup")
-
 	standupOut, err := standupCmd.Output()
 
 	if err != nil {
@@ -46,5 +46,19 @@ func main() {
 
 			commits = append(commits, Report{commitID, commit})
 		}
+	}
+
+	tmpt, err := ioutil.ReadFile("template.html")
+
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Got commits: %s\n", commits)
+
+	t := template.New("Report template")
+	t.Parse(string(tmpt))
+	if err := t.Execute(os.Stdout, commits); err != nil {
+		panic(err)
 	}
 }

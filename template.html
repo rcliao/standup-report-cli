@@ -9,7 +9,7 @@
         {{ range $index, $element := . }}
             <li>
                 {{ $index }} - 
-                {{ $element }}
+		{{ $element.ID }} - {{ $element.Comment }}
             </li>
         {{ end }}
     </ul>

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -37,14 +38,16 @@ func main() {
 	standupParts := strings.Split(string(standupOut), "\n")
 	commits := []Report{}
 
+	r, _ := regexp.Compile(`\x1b\[[0-9;]*m`)
+
 	for _, part := range standupParts {
 		commitParts := strings.Split(part, " - ")
 
 		if len(commitParts) == 2 {
-			commitID := commitParts[0]
-			commit := commitParts[1]
+			commitID := r.ReplaceAllString(commitParts[0], "")
+			comment := r.ReplaceAllString(commitParts[1], "")
 
-			commits = append(commits, Report{commitID, commit})
+			commits = append(commits, Report{commitID, comment})
 		}
 	}
 
@@ -54,11 +57,15 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Printf("Got commits: %s\n", commits)
+	f, err := os.Create("standup.html")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
 
 	t := template.New("Report template")
 	t.Parse(string(tmpt))
-	if err := t.Execute(os.Stdout, commits); err != nil {
+	if err := t.Execute(f, commits); err != nil {
 		panic(err)
 	}
 }

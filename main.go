@@ -3,18 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
-	"strings"
 )
 
 // Report indicate each report entity with commit id and comment
 type Report struct {
 	ID      string
+	Author  string
+	Date    string
 	Comment string
 }
 
@@ -23,86 +22,125 @@ type Repository struct {
 	SSHUrl string `json:"ssh_url"`
 }
 
+func handleError(err error) {
+	fmt.Printf("Facing error: %v\n", err)
+	panic(err)
+}
+
 func main() {
 	// get environment variable by 12 factor app practice
 	orgName := os.Getenv("GITHUB_ORGANIZATION_NAME")
 	accessToken := os.Getenv("GITHUB_ACCESS_TOKEN")
 
-	resp, err := http.Get("https://api.github.com/orgs/" + orgName + "/repos?access_token=" + accessToken)
-
+	err := cloneAllOrganizationRepositories(orgName, accessToken)
 	if err != nil {
-		panic(err)
+		handleError(err)
 	}
-	defer resp.Body.Close()
-	decoder := json.NewDecoder(resp.Body)
-	var repositories []Repository
-	err2 := decoder.Decode(&repositories)
-	if err2 != nil {
-		panic(err)
+}
+
+func cloneAllOrganizationRepositories(orgName, accessToken string) error {
+	repositories, err := getAllRepositories("https://api.github.com/orgs/" + orgName + "/repos?access_token=" + accessToken)
+	if err != nil {
+		return err
 	}
 
+	// for each repository, clone them down
+	// TOOD: try to use goroutine here to speed up the clone process
 	for _, repository := range repositories {
 		fmt.Printf("Cloning %s\n", repository.SSHUrl)
-		re, _ := regexp.Compile(`git@github.com:(\S*).git`)
+		re := regexp.MustCompile(`git@github.com:(\S*).git`)
 		folder := re.FindStringSubmatch(repository.SSHUrl)[1]
 		exists, _ := folderExists(folder)
 		if !exists {
 			cloneCmd := exec.Command("git", "clone", repository.SSHUrl, folder)
 			err := cloneCmd.Run()
 			if err != nil {
-				panic(err)
+				return err
 			}
 		}
 	}
-	tmpt, err := ioutil.ReadFile("template.html")
 
-	// before running standup, change the directory to organization folder
-	os.Chdir(orgName)
+	return nil
+}
 
-	standupCmd := exec.Command("git", "standup", "-f", "-d", "7")
-	standupOut, err := standupCmd.Output()
+func getAllRepositories(githubAPIURL string) ([]Repository, error) {
+	repositories := []Repository{}
 
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("Got standup report:\n%s\n", standupOut)
-
-	standupParts := strings.Split(string(standupOut), "\n")
-	commits := []Report{}
-
-	r, err := regexp.Compile(`\x1b\[[0-9;]*m`)
+	resp, err := http.Get(githubAPIURL)
+	defer resp.Body.Close()
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	for _, part := range standupParts {
-		commitParts := strings.Split(part, " - ")
+	decoder := json.NewDecoder(resp.Body)
+	err2 := decoder.Decode(&repositories)
+	if err2 != nil {
+		return nil, err2
+	}
 
-		if len(commitParts) == 2 {
-			commitID := r.ReplaceAllString(commitParts[0], "")
-			comment := r.ReplaceAllString(commitParts[1], "")
+	// check if there is next page
+	r := regexp.MustCompile(`(<(\S+)>;\srel="(\S+)",*)+`)
+	links := r.FindAllStringSubmatch(resp.Header.Get("Link"), -1)
 
-			commits = append(commits, Report{commitID, comment})
+	for _, link := range links {
+		url := link[1]
+		label := link[2]
+		if label == "next" {
+			nextPageRepositories, err := getAllRepositories(url)
+			if err != nil {
+				return nil, err
+			}
+			return append(repositories, nextPageRepositories...), nil
 		}
 	}
 
-	if err != nil {
-		panic(err)
-	}
+	return repositories, nil
+}
 
-	f, err := os.Create("standup.html")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
+func generateReport(orgName string) {
+	/*
+			tmpt, err := ioutil.ReadFile("template.html")
+			if err != nil {
+				handleError(err)
+			}
+			// before running standup, change the directory to organization folder
+			os.Chdir(orgName)
 
-	t := template.New("Report template")
-	t.Parse(string(tmpt))
-	if err := t.Execute(f, commits); err != nil {
-		panic(err)
-	}
+			standupCmd := exec.Command("git", "standup", "-f", "-d", "7")
+			standupOut, err := standupCmd.Output()
+
+			standupParts := strings.Split(string(standupOut), "\n")
+			commits := []Report{}
+
+			r, err := regexp.Compile(`\x1b\[[0-9;]*m`)
+			if err != nil {
+				panic(err)
+			}
+
+				for _, part := range standupParts {
+					commitParts := strings.Split(part, " - ")
+
+					if len(commitParts) == 2 {
+						commitID := r.ReplaceAllString(commitParts[0], "")
+						comment := r.ReplaceAllString(commitParts[1], "")
+
+						commits = append(commits, Report{commitID, comment})
+					}
+				}
+
+		f, err := os.Create("standup.html")
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+
+		t := template.New("Report template")
+		t.Parse(string(tmpt))
+		if err := t.Execute(f, commits); err != nil {
+			panic(err)
+		}
+	*/
 }
 
 func folderExists(path string) (bool, error) {

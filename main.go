@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 )
 
 // Report indicate each report entity with commit id and comment
@@ -36,6 +39,8 @@ func main() {
 	if err != nil {
 		handleError(err)
 	}
+
+	generateReport(orgName)
 }
 
 func cloneAllOrganizationRepositories(orgName, accessToken string) error {
@@ -84,8 +89,9 @@ func getAllRepositories(githubAPIURL string) ([]Repository, error) {
 	links := r.FindAllStringSubmatch(resp.Header.Get("Link"), -1)
 
 	for _, link := range links {
-		url := link[1]
-		label := link[2]
+		fmt.Printf("Got link: %v %v\n", link[2], link[3])
+		url := link[2]
+		label := link[3]
 		if label == "next" {
 			nextPageRepositories, err := getAllRepositories(url)
 			if err != nil {
@@ -99,48 +105,47 @@ func getAllRepositories(githubAPIURL string) ([]Repository, error) {
 }
 
 func generateReport(orgName string) {
-	/*
-			tmpt, err := ioutil.ReadFile("template.html")
-			if err != nil {
-				handleError(err)
-			}
-			// before running standup, change the directory to organization folder
-			os.Chdir(orgName)
+	tmpt, err := ioutil.ReadFile("template.html")
+	if err != nil {
+		handleError(err)
+	}
+	// before running standup, change the directory to organization folder
+	os.Chdir(orgName)
 
-			standupCmd := exec.Command("git", "standup", "-f", "-d", "7")
-			standupOut, err := standupCmd.Output()
+	standupCmd := exec.Command("git", "standup", "-f", "-d", "7")
+	standupOut, err := standupCmd.Output()
 
-			standupParts := strings.Split(string(standupOut), "\n")
-			commits := []Report{}
+	standupParts := strings.Split(string(standupOut), "\n")
+	commits := []Report{}
 
-			r, err := regexp.Compile(`\x1b\[[0-9;]*m`)
-			if err != nil {
-				panic(err)
-			}
+	r, err := regexp.Compile(`\x1b\[[0-9;]*m`)
+	if err != nil {
+		panic(err)
+	}
 
-				for _, part := range standupParts {
-					commitParts := strings.Split(part, " - ")
+	for _, part := range standupParts {
+		commitParts := strings.Split(part, " - ")
 
-					if len(commitParts) == 2 {
-						commitID := r.ReplaceAllString(commitParts[0], "")
-						comment := r.ReplaceAllString(commitParts[1], "")
+		if len(commitParts) == 2 {
+			commitID := r.ReplaceAllString(commitParts[0], "")
+			comment := r.ReplaceAllString(commitParts[1], "")
 
-						commits = append(commits, Report{commitID, comment})
-					}
-				}
-
-		f, err := os.Create("standup.html")
-		if err != nil {
-			panic(err)
+			// TODO: parse the commit correctly
+			commits = append(commits, Report{commitID, comment, "", ""})
 		}
-		defer f.Close()
+	}
 
-		t := template.New("Report template")
-		t.Parse(string(tmpt))
-		if err := t.Execute(f, commits); err != nil {
-			panic(err)
-		}
-	*/
+	f, err := os.Create("standup.html")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	t := template.New("Report template")
+	t.Parse(string(tmpt))
+	if err := t.Execute(f, commits); err != nil {
+		panic(err)
+	}
 }
 
 func folderExists(path string) (bool, error) {

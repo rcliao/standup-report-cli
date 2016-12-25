@@ -8,8 +8,8 @@
     <ul>
         {{ range $index, $element := . }}
             <li>
-                {{ $index }} - 
-		{{ $element.ID }} - {{ $element.Comment }}
+		{{ $element.Repository }} = {{ $element.Author }} - 
+		{{ $element.ID }} - {{ $element.Comment }} ({{$element.Date}})
             </li>
         {{ end }}
     </ul>

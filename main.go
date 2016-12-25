@@ -14,10 +14,11 @@ import (
 
 // Report indicate each report entity with commit id and comment
 type Report struct {
-	ID      string
-	Author  string
-	Date    string
-	Comment string
+	ID         string
+	Author     string
+	Date       string
+	Comment    string
+	Repository string
 }
 
 // Repository is a DTO objec to represent JSON from Github repository end point
@@ -62,6 +63,8 @@ func cloneAllOrganizationRepositories(orgName, accessToken string) error {
 			if err != nil {
 				return err
 			}
+		} else {
+			// should fetch the latest changes
 		}
 	}
 
@@ -104,48 +107,69 @@ func getAllRepositories(githubAPIURL string) ([]Repository, error) {
 	return repositories, nil
 }
 
-func generateReport(orgName string) {
+func generateReport(orgName string) error {
 	tmpt, err := ioutil.ReadFile("template.html")
 	if err != nil {
-		handleError(err)
+		return err
 	}
+	currentDir, err := os.Getwd()
+
+	if err != nil {
+		return err
+	}
+
 	// before running standup, change the directory to organization folder
 	os.Chdir(orgName)
 
-	standupCmd := exec.Command("git", "standup", "-f", "-d", "7")
+	standupCmd := exec.Command("git", "standup", "-d", "7", "-a", "all", "-D", "local")
 	standupOut, err := standupCmd.Output()
+
+	if err != nil {
+		return err
+	}
 
 	standupParts := strings.Split(string(standupOut), "\n")
 	commits := []Report{}
 
-	r, err := regexp.Compile(`\x1b\[[0-9;]*m`)
-	if err != nil {
-		panic(err)
-	}
+	// regex to remove terminal color related text
+	cleanRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	commitRegex := regexp.MustCompile(`(.+)\s-\s(.+)\s\((.+)\)\s<(.+)>`)
+	var repositoryName = ""
 
 	for _, part := range standupParts {
-		commitParts := strings.Split(part, " - ")
-
-		if len(commitParts) == 2 {
-			commitID := r.ReplaceAllString(commitParts[0], "")
-			comment := r.ReplaceAllString(commitParts[1], "")
-
-			// TODO: parse the commit correctly
-			commits = append(commits, Report{commitID, comment, "", ""})
+		cleanedPart := cleanRegex.ReplaceAllString(part, "")
+		if commitRegex.MatchString(cleanedPart) {
+			commitParts := commitRegex.FindStringSubmatch(cleanedPart)
+			fmt.Printf("%v\n", commitParts)
+			commitID := commitParts[1]
+			comment := commitParts[2]
+			date := commitParts[3]
+			author := commitParts[4]
+			commits = append(commits, Report{
+				ID:         commitID,
+				Author:     author,
+				Date:       date,
+				Comment:    comment,
+				Repository: repositoryName,
+			})
+		} else {
+			repositoryName = strings.Replace(part, currentDir, "", -1)
 		}
 	}
 
 	f, err := os.Create("standup.html")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer f.Close()
 
 	t := template.New("Report template")
 	t.Parse(string(tmpt))
 	if err := t.Execute(f, commits); err != nil {
-		panic(err)
+		return err
 	}
+
+	return nil
 }
 
 func folderExists(path string) (bool, error) {

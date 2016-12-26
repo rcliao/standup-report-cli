@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -32,16 +33,21 @@ func handleError(err error) {
 }
 
 func main() {
-	// get environment variable by 12 factor app practice
-	orgName := os.Getenv("GITHUB_ORGANIZATION_NAME")
-	accessToken := os.Getenv("GITHUB_ACCESS_TOKEN")
+	orgName := flag.String("org_name", "", "GITHUB ORGANIZATION NAME")
+	accessToken := flag.String("access_token", "", "GITHUB ACCESS TOKEN")
+	flag.Parse()
 
-	err := cloneAllOrganizationRepositories(orgName, accessToken)
+	if *orgName == "" || *accessToken == "" {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	err := cloneAllOrganizationRepositories(*orgName, *accessToken)
 	if err != nil {
 		handleError(err)
 	}
 
-	generateReport(orgName)
+	generateReport(*orgName)
 }
 
 func cloneAllOrganizationRepositories(orgName, accessToken string) error {
